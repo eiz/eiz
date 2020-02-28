@@ -1,0 +1,10 @@
+[package]
+name = "eiz"
+version = "0.1.0"
+authors = ["Mack Straight <mack@discordapp.com>"]
+edition = "2018"
+description = "some more code"
+license = "MIT"
+repository = "https://github.com/eiz/eiz"
+
+[dependencies]

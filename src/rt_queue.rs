@@ -1,14 +1,14 @@
-use alloc::alloc::alloc;
+use alloc::alloc::{alloc, dealloc};
 use alloc::sync::Arc;
 use core::alloc::Layout;
 use core::mem::MaybeUninit;
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 /// A wait-free, single producer, single consumer, thread safe ring buffer. Notably, elements do
-/// not need to implement `Copy`. The ring size must be a power of 2 and [`new`] will panic if it
+/// not need to implement `Copy`. The ring size must be a power of 2 and `new` will panic if it
 /// isn't.
 ///
-/// [`new`]: ./fn.new.html
+/// Probably unsound/buggy. Don't use it.
 pub struct AtomicRing<T: Send> {
     buf: *mut MaybeUninit<T>,
     length: usize,
@@ -49,6 +49,13 @@ impl<T: Send> Drop for AtomicRing<T> {
 
             read_ptr += 1;
         }
+
+        unsafe {
+            dealloc(
+                self.buf as *mut u8,
+                Layout::array::<MaybeUninit<T>>(self.length).unwrap(),
+            )
+        }
     }
 }
 
@@ -58,6 +65,7 @@ pub struct AtomicRingReader<T: Send>(Arc<AtomicRing<T>>);
 pub struct AtomicRingWriter<T: Send>(Arc<AtomicRing<T>>);
 
 impl<T: Send> AtomicRingReader<T> {
+    /// At least this many items can be read from the buffer.
     pub fn read_available(&self) -> usize {
         let write_ptr = self.0.write_ptr.load(Ordering::SeqCst);
         let read_ptr = self.0.read_ptr.load(Ordering::SeqCst);
@@ -65,6 +73,7 @@ impl<T: Send> AtomicRingReader<T> {
         write_ptr - read_ptr
     }
 
+    /// Tries to remove an item from the buffer, returning `None` if no item could be read.
     pub fn try_pop(&mut self) -> Option<T> {
         let read_ptr = self.0.read_ptr.load(Ordering::SeqCst);
         let write_ptr = self.0.write_ptr.load(Ordering::SeqCst);

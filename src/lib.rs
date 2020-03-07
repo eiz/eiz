@@ -1,8 +1,5 @@
-// Yes, I'm squatting atm, my util library will be going here soon.
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
-}
+#![cfg_attr(not(test), no_std)]
+#![feature(alloc_layout_extra, maybe_uninit_extra)]
+extern crate alloc;
+
+pub mod rt_queue;

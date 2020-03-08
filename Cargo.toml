@@ -1,6 +1,6 @@
 [package]
 name = "eiz"
-version = "0.2.1"
+version = "0.3.0"
 authors = ["Mack Straight <mack@discordapp.com>"]
 edition = "2018"
 description = "some more code"
@@ -8,8 +8,10 @@ license = "MIT"
 repository = "https://github.com/eiz/eiz"
 
 [features]
-default = ["rt_queue"]
+default = ["rt_queue", "rt_queue_std"]
 use_std = []
 rt_queue = []
+rt_queue_std = ["parking_lot", "rt_queue", "use_std"]
 
 [dependencies]
+parking_lot = { optional = true, version = "0.10.0" }

@@ -1,12 +1,79 @@
+//! Provides queues suitable for use in real-time programming. Real-time in this sense is defined
+//! as "threads which need to service events on a fixed deadline." For example, audio or other
+//! hardware interfacing where the hardware will produce incorrect behavior if a deadline is
+//! missed. Special care is taken to provide interfaces which are not subject to priority inversion
+//! or other thread scheduling anomalies, to the extent possible.
+//!
+//! Probably unsound/buggy. Don't use it. Have you tried crossbeam channels?
 use alloc::alloc::{alloc, dealloc};
 use alloc::sync::Arc;
 use core::alloc::Layout;
 use core::mem::MaybeUninit;
 use core::sync::atomic::{AtomicUsize, Ordering};
 
-/// A wait-free (assuming atomic store/load are wait-free), single producer, single consumer,
-/// thread safe ring buffer. Notably, elements do not need to implement `Copy`. The ring size must
-/// be a power of 2 and `new` will panic if it isn't.
+/// The `try_push` operation.
+pub trait Push<T: Send> {
+    /// Tries to insert `value` into the container. If successful, returns `None`, otherwise
+    /// returns `Some(value)`.
+    fn try_push(&mut self, value: T) -> Option<T>;
+}
+
+/// The `push` operation.
+pub trait PushWait<T: Send> {
+    /// Inserts `value` into the container, waiting for available space if needed.
+    fn push(&mut self, value: T);
+}
+
+/// The `try_pushn` operation.
+pub trait PushN<T: Send + Clone> {
+    /// Tries to copy a slice of values into the container. Returns the number of values
+    /// successfully copied from the slice.
+    fn try_pushn(&mut self, value: &[T]) -> usize;
+}
+
+/// The `pushn` operation.
+pub trait PushNWait<T: Send + Clone> {
+    /// Pushes multiple items from `value` into the container, waiting for available space if
+    /// needed.
+    fn pushn(&mut self, value: &[T]);
+}
+
+/// The `try_pushn_copy` operation.
+pub trait PushNCopy<T: Send + Copy> {
+    fn try_pushn_copy(&mut self, value: &[T]) -> usize;
+}
+
+/// The `pushn_copy` operation.
+pub trait PushNCopyWait<T: Send + Copy> {
+    fn pushn_copy(&mut self, value: &[T]);
+}
+
+/// The `try_pop` operation.
+pub trait Pop<T: Send> {
+    /// Tries to remove an item from the container, returning `None` if no item could be read.
+    fn try_pop(&mut self) -> Option<T>;
+}
+
+/// The `pop` operation.
+pub trait PopWait<T: Send> {
+    /// Removes an item from the container, waiting for a writer if needed.
+    fn pop(&mut self) -> T;
+}
+
+/// The `try_popn` operation.
+pub trait PopN<T: Send> {
+    fn try_popn(&mut self, dst: &mut [T]) -> usize;
+}
+
+/// The `try_popn_copy` operation.
+pub trait PopNCopy<T: Send + Copy> {
+    fn try_popn_copy(&mut self, dst: &mut [T]) -> usize;
+}
+
+/// A wait-free, single producer, single consumer, thread safe ring buffer.
+///
+/// Notably, elements do not need to implement `Copy`. The ring size must be a power of 2 and `new`
+/// will panic if it isn't. Merely lock-free if atomic load/store aren't wait-free.
 ///
 /// Probably unsound/buggy. Don't use it.
 pub struct AtomicRing<T: Send> {
@@ -67,16 +134,17 @@ pub struct AtomicRingWriter<T: Send>(Arc<AtomicRing<T>>);
 impl<T: Send> AtomicRingReader<T> {
     /// At least this many items can be read from the buffer.
     pub fn read_available(&self) -> usize {
-        let read_ptr = self.0.read_ptr.load(Ordering::SeqCst);
-        let write_ptr = self.0.write_ptr.load(Ordering::SeqCst);
+        let read_ptr = self.0.read_ptr.load(Ordering::Acquire);
+        let write_ptr = self.0.write_ptr.load(Ordering::Acquire);
 
         write_ptr - read_ptr
     }
+}
 
-    /// Tries to remove an item from the buffer, returning `None` if no item could be read.
-    pub fn try_pop(&mut self) -> Option<T> {
-        let read_ptr = self.0.read_ptr.load(Ordering::SeqCst);
-        let write_ptr = self.0.write_ptr.load(Ordering::SeqCst);
+impl<T: Send> Pop<T> for AtomicRingReader<T> {
+    fn try_pop(&mut self) -> Option<T> {
+        let read_ptr = self.0.read_ptr.load(Ordering::Acquire);
+        let write_ptr = self.0.write_ptr.load(Ordering::Acquire);
         let read_masked = read_ptr & (self.0.length - 1);
 
         if write_ptr == read_ptr {
@@ -86,24 +154,24 @@ impl<T: Send> AtomicRingReader<T> {
         let result = unsafe { (*self.0.buf.offset(read_masked as isize)).read() };
         self.0
             .read_ptr
-            .store(read_ptr.wrapping_add(1), Ordering::SeqCst);
+            .store(read_ptr.wrapping_add(1), Ordering::Release);
         Some(result)
     }
 }
 
 impl<T: Send> AtomicRingWriter<T> {
     pub fn write_available(&self) -> usize {
-        let read_ptr = self.0.read_ptr.load(Ordering::SeqCst);
-        let write_ptr = self.0.write_ptr.load(Ordering::SeqCst);
+        let read_ptr = self.0.read_ptr.load(Ordering::Acquire);
+        let write_ptr = self.0.write_ptr.load(Ordering::Acquire);
 
         self.0.length - (write_ptr - read_ptr)
     }
+}
 
-    /// Tries to insert the item into the buffer. If successful, returns `None`, otherwise returns
-    /// `Some(value)`.
-    pub fn try_push(&mut self, value: T) -> Option<T> {
-        let read_ptr = self.0.read_ptr.load(Ordering::SeqCst);
-        let write_ptr = self.0.write_ptr.load(Ordering::SeqCst);
+impl<T: Send> Push<T> for AtomicRingWriter<T> {
+    fn try_push(&mut self, value: T) -> Option<T> {
+        let read_ptr = self.0.read_ptr.load(Ordering::Acquire);
+        let write_ptr = self.0.write_ptr.load(Ordering::Acquire);
         let write_masked = write_ptr & (self.0.length - 1);
 
         if write_ptr - read_ptr == self.0.length {
@@ -113,22 +181,16 @@ impl<T: Send> AtomicRingWriter<T> {
         unsafe { (*self.0.buf.offset(write_masked as isize)).write(value) };
         self.0
             .write_ptr
-            .store(write_ptr.wrapping_add(1), Ordering::SeqCst);
+            .store(write_ptr.wrapping_add(1), Ordering::Release);
         None
     }
 }
 
-pub trait AtomicRingMultiWrite<T: Send + Clone> {
-    fn try_pushn(&mut self, value: &[T]) -> usize;
-}
-
-impl<T: Send + Clone> AtomicRingMultiWrite<T> for AtomicRingWriter<T> {
-    /// Tries to copy a slice of values into the buffer. Returns the number of values successfully
-    /// copied from the slice.
+impl<T: Send + Clone> PushN<T> for AtomicRingWriter<T> {
     fn try_pushn(&mut self, value: &[T]) -> usize {
         let mut copied = 0;
-        let read_ptr = self.0.read_ptr.load(Ordering::SeqCst);
-        let write_ptr = self.0.write_ptr.load(Ordering::SeqCst);
+        let read_ptr = self.0.read_ptr.load(Ordering::Acquire);
+        let write_ptr = self.0.write_ptr.load(Ordering::Acquire);
         let to_write = self.0.length - (write_ptr - read_ptr);
 
         for item in value {
@@ -144,16 +206,123 @@ impl<T: Send + Clone> AtomicRingMultiWrite<T> for AtomicRingWriter<T> {
 
         self.0
             .write_ptr
-            .store(write_ptr.wrapping_add(copied), Ordering::SeqCst);
+            .store(write_ptr.wrapping_add(copied), Ordering::Release);
         copied
     }
 }
+
+#[cfg(feature = "rt_queue_std")]
+mod std_detail {
+    use super::*;
+    use parking_lot::{Condvar, Mutex};
+
+    /// A simple bounded multiple producer, single consumer queue.
+    ///
+    /// The consumer side has a wait-free `try_pop` that always succeeds if there is data in the
+    /// buffer. Synchronization is otherwise via a `parking_lot` mutex and condition variable.
+    pub struct MpscQueue<T: Send> {
+        ring_writer: Mutex<AtomicRingWriter<T>>,
+        cond_read: Condvar,
+    }
+
+    impl<T: Send> MpscQueue<T> {
+        /// Returns a new queue with a bound of at least `length`. In practice, it's rounded to the
+        /// next power of two.
+        pub fn new(length: usize) -> (MpscQueueReader<T>, MpscQueueWriter<T>) {
+            let length = length.next_power_of_two();
+            let (read, write) = AtomicRing::new(length);
+            let instance = Arc::new(Self {
+                ring_writer: Mutex::new(write),
+                cond_read: Condvar::new(),
+            });
+
+            (
+                MpscQueueReader {
+                    inner: instance.clone(),
+                    read,
+                },
+                MpscQueueWriter(instance),
+            )
+        }
+    }
+
+    /// The write side of an MPSC queue.
+    #[derive(Clone)]
+    pub struct MpscQueueWriter<T: Send>(Arc<MpscQueue<T>>);
+
+    impl<T: Send> Push<T> for MpscQueueWriter<T> {
+        fn try_push(&mut self, value: T) -> Option<T> {
+            let mut ring_writer = self.0.ring_writer.lock();
+            let result = ring_writer.try_push(value);
+
+            if result.is_none() {
+                self.0.cond_read.notify_one();
+            }
+
+            result
+        }
+    }
+
+    impl<T: Send + Clone> PushN<T> for MpscQueueWriter<T> {
+        fn try_pushn(&mut self, value: &[T]) -> usize {
+            let mut ring_writer = self.0.ring_writer.lock();
+            let result = ring_writer.try_pushn(value);
+
+            if result > 0 {
+                self.0.cond_read.notify_one();
+            }
+
+            result
+        }
+    }
+
+    /// The read side an of an MPSC queue.
+    pub struct MpscQueueReader<T: Send> {
+        inner: Arc<MpscQueue<T>>,
+        read: AtomicRingReader<T>,
+    }
+
+    impl<T: Send> Pop<T> for MpscQueueReader<T> {
+        fn try_pop(&mut self) -> Option<T> {
+            let result = self.read.try_pop();
+            result
+        }
+    }
+
+    impl<T: Send> PopWait<T> for MpscQueueReader<T> {
+        fn pop(&mut self) -> T {
+            let mut result = self.try_pop();
+
+            if result.is_some() {
+                return result.unwrap();
+            }
+
+            let mut ring_writer = self.inner.ring_writer.lock();
+
+            loop {
+                result = self.read.try_pop();
+
+                if result.is_some() {
+                    break;
+                }
+
+                self.inner.cond_read.wait(&mut ring_writer);
+            }
+
+            result.unwrap()
+        }
+    }
+}
+
+#[cfg(feature = "rt_queue_std")]
+pub use std_detail::*;
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use core::sync::atomic::{AtomicBool, AtomicU64};
     use std::thread;
+    use std::time::{Duration, Instant};
 
     /* it doesn't. TODO(eiz): re-implement self-cargo-invocation gunk.
     struct YouCantCloneMe;
@@ -278,6 +447,23 @@ mod tests {
     }
 
     #[test]
+    pub fn stress_it() {
+        let mut joins = vec![];
+
+        for _ in 0..32 {
+            joins.push(thread::spawn(|| {
+                for _ in 0..100 {
+                    multi_thread_doesnt_blatantly_crash();
+                }
+            }));
+        }
+
+        for j in joins.into_iter() {
+            j.join().unwrap();
+        }
+    }
+
+    #[test]
     pub fn write_multi_kinda_functions() {
         let (mut read, mut write) = AtomicRing::new(8);
 
@@ -301,4 +487,73 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    pub fn mpsc_single_thread_two_writers() {
+        #[derive(Clone, Debug, PartialEq, Eq)]
+        enum Message {
+            MessageA,
+            MessageB,
+        }
+
+        let (mut read, write) = MpscQueue::new(2);
+        let mut writer_a = write.clone();
+        let mut writer_b = write.clone();
+
+        assert!(writer_a.try_push(Message::MessageA).is_none());
+        assert!(writer_b.try_push(Message::MessageB).is_none());
+        assert_eq!(read.try_pop(), Some(Message::MessageA));
+        assert_eq!(read.try_pop(), Some(Message::MessageB));
+    }
+
+    #[test]
+    pub fn mpsc_pop_wait_waits() {
+        let (mut read, mut write) = MpscQueue::new(1);
+        let (mut started_read, mut started_write) = MpscQueue::new(1);
+        let (mut finished_read, mut finished_write) = MpscQueue::new(1);
+        let join_a = thread::spawn(move || {
+            let start = Instant::now();
+
+            assert!(started_write.try_push(()).is_none());
+            assert_eq!(read.pop(), 1234);
+            assert!(finished_write
+                .try_push(Instant::now().duration_since(start))
+                .is_none());
+        });
+        started_read.pop();
+        thread::sleep(Duration::from_secs(2));
+        write.try_push(1234);
+        let elapsed = finished_read.pop();
+
+        assert!(elapsed > Duration::from_secs(1));
+        join_a.join().unwrap();
+    }
+
+    /*
+     * This is currently not implemented because the semantics of `parking_lot::Condvar` don't
+     * allow it to be implemented in a way that can't force the reader to wait on writers safely.
+     * Need some other sync primitive first.
+     *
+    #[test]
+    pub fn mpsc_push_wait_waits() {
+        let (mut read, mut write) = MpscQueue::<Instant>::new(1);
+        let (mut init_read, mut init_write) = MpscQueue::new(1);
+        let join_a = thread::spawn(move || {
+            let duration = init_read.pop();
+
+            thread::sleep(duration);
+            read.pop();
+            let first = read.pop();
+            let second = read.pop();
+
+            assert!(second.duration_since(first) > duration / 2);
+        });
+
+        write.push(Instant::now());
+        init_write.push(Duration::from_secs(1));
+        write.push(Instant::now());
+        write.push(Instant::now());
+        join_a.join().unwrap();
+    }
+    */
 }

@@ -4,9 +4,9 @@ use core::alloc::Layout;
 use core::mem::MaybeUninit;
 use core::sync::atomic::{AtomicUsize, Ordering};
 
-/// A wait-free, single producer, single consumer, thread safe ring buffer. Notably, elements do
-/// not need to implement `Copy`. The ring size must be a power of 2 and `new` will panic if it
-/// isn't.
+/// A wait-free (assuming atomic store/load are wait-free), single producer, single consumer,
+/// thread safe ring buffer. Notably, elements do not need to implement `Copy`. The ring size must
+/// be a power of 2 and `new` will panic if it isn't.
 ///
 /// Probably unsound/buggy. Don't use it.
 pub struct AtomicRing<T: Send> {
@@ -21,7 +21,7 @@ unsafe impl<T: Send> Sync for AtomicRing<T> {}
 
 impl<T: Send> AtomicRing<T> {
     pub fn new(length: usize) -> (AtomicRingReader<T>, AtomicRingWriter<T>) {
-        assert!(length > 0 && length.is_power_of_two());
+        assert!(length.is_power_of_two());
 
         let state = Arc::new(Self {
             buf: unsafe { alloc(Layout::array::<MaybeUninit<T>>(length).unwrap()) }
@@ -67,8 +67,8 @@ pub struct AtomicRingWriter<T: Send>(Arc<AtomicRing<T>>);
 impl<T: Send> AtomicRingReader<T> {
     /// At least this many items can be read from the buffer.
     pub fn read_available(&self) -> usize {
-        let write_ptr = self.0.write_ptr.load(Ordering::SeqCst);
         let read_ptr = self.0.read_ptr.load(Ordering::SeqCst);
+        let write_ptr = self.0.write_ptr.load(Ordering::SeqCst);
 
         write_ptr - read_ptr
     }
@@ -116,24 +116,35 @@ impl<T: Send> AtomicRingWriter<T> {
             .store(write_ptr.wrapping_add(1), Ordering::SeqCst);
         None
     }
+}
 
+pub trait AtomicRingMultiWrite<T: Send + Clone> {
+    fn try_pushn(&mut self, value: &[T]) -> usize;
+}
+
+impl<T: Send + Clone> AtomicRingMultiWrite<T> for AtomicRingWriter<T> {
     /// Tries to copy a slice of values into the buffer. Returns the number of values successfully
     /// copied from the slice.
-    pub fn try_pushn<Q>(&mut self, value: &[Q]) -> usize
-    where
-        Q: Clone + Into<T>,
-    {
-        // TODO(eiz): efficient implementation of this.
+    fn try_pushn(&mut self, value: &[T]) -> usize {
         let mut copied = 0;
+        let read_ptr = self.0.read_ptr.load(Ordering::SeqCst);
+        let write_ptr = self.0.write_ptr.load(Ordering::SeqCst);
+        let to_write = self.0.length - (write_ptr - read_ptr);
 
         for item in value {
-            if let Some(_) = self.try_push(item.clone().into()) {
+            if copied == to_write {
                 break;
             }
 
+            let write_masked = (write_ptr + copied) & (self.0.length - 1);
+
+            unsafe { (*self.0.buf.offset(write_masked as isize)).write(item.clone()) };
             copied += 1;
         }
 
+        self.0
+            .write_ptr
+            .store(write_ptr.wrapping_add(copied), Ordering::SeqCst);
         copied
     }
 }
@@ -144,16 +155,28 @@ mod tests {
     use core::sync::atomic::{AtomicBool, AtomicU64};
     use std::thread;
 
+    /* it doesn't. TODO(eiz): re-implement self-cargo-invocation gunk.
+    struct YouCantCloneMe;
+
+    #[test]
+    pub fn this_shouldnt_compile() {
+        let (_, mut write) = AtomicRing::new(1);
+
+        write.try_pushn(&[YouCantCloneMe]);
+    }
+     */
+
     #[test]
     pub fn works_single_thread() {
         let (mut read, mut write) = AtomicRing::new(2);
 
-        assert!(write.try_push("hello").is_none());
-        assert!(write.try_push("world").is_none());
-        assert!(read.try_pop().unwrap() == "hello");
-        assert!(write.try_push("three").is_none());
+        assert!(write.try_push("hello".to_owned()).is_none());
+        assert!(write.try_push("world".to_owned()).is_none());
+        assert!(read.try_pop().unwrap() == "hello".to_owned());
+        assert!(write.try_push("three".to_owned()).is_none());
         assert!(read.try_pop().unwrap() == "world");
         assert!(read.try_pop().unwrap() == "three");
+        write.try_pushn(&["hello".to_owned(), "world".to_owned()]);
     }
 
     #[derive(Default)]
@@ -252,5 +275,30 @@ mod tests {
         join_w.join().unwrap();
         assert_eq!(counter_r.allocated(), 100 * 1024);
         assert_eq!(counter_r.alive(), 0);
+    }
+
+    #[test]
+    pub fn write_multi_kinda_functions() {
+        let (mut read, mut write) = AtomicRing::new(8);
+
+        assert_eq!(write.try_pushn(&[1u8, 2, 3, 4, 5, 6, 7, 8, 9]), 8);
+
+        for i in 0..8 {
+            assert_eq!(read.try_pop(), Some(i + 1));
+        }
+
+        assert_eq!(write.try_pushn(&[1u8, 2, 3, 4, 5, 6, 7, 8, 9]), 8);
+        assert_eq!(write.try_pushn(&[1u8, 2, 3, 4, 5, 6, 7, 8, 9]), 0);
+
+        // force a wrap
+        let (mut read, mut write) = AtomicRing::new(8);
+
+        for _ in 0..2 {
+            assert_eq!(write.try_pushn(&[1u8, 2, 3, 4, 5, 6]), 6);
+
+            for i in 0..6 {
+                assert_eq!(read.try_pop(), Some(i + 1));
+            }
+        }
     }
 }

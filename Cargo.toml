@@ -7,4 +7,9 @@ description = "some more code"
 license = "MIT"
 repository = "https://github.com/eiz/eiz"
 
+[features]
+default = ["rt_queue"]
+use_std = []
+rt_queue = []
+
 [dependencies]

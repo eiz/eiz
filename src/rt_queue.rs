@@ -135,7 +135,7 @@ impl<T: Send> AtomicRingReader<T> {
     /// At least this many items can be read from the buffer.
     pub fn read_available(&self) -> usize {
         let read_ptr = self.0.read_ptr.load(Ordering::Acquire);
-        let write_ptr = self.0.write_ptr.load(Ordering::Acquire);
+        let write_ptr = self.0.write_ptr.load(Ordering::Relaxed);
 
         write_ptr - read_ptr
     }
@@ -144,7 +144,7 @@ impl<T: Send> AtomicRingReader<T> {
 impl<T: Send> Pop<T> for AtomicRingReader<T> {
     fn try_pop(&mut self) -> Option<T> {
         let read_ptr = self.0.read_ptr.load(Ordering::Acquire);
-        let write_ptr = self.0.write_ptr.load(Ordering::Acquire);
+        let write_ptr = self.0.write_ptr.load(Ordering::Relaxed);
         let read_masked = read_ptr & (self.0.length - 1);
 
         if write_ptr == read_ptr {
@@ -161,7 +161,7 @@ impl<T: Send> Pop<T> for AtomicRingReader<T> {
 
 impl<T: Send> AtomicRingWriter<T> {
     pub fn write_available(&self) -> usize {
-        let read_ptr = self.0.read_ptr.load(Ordering::Acquire);
+        let read_ptr = self.0.read_ptr.load(Ordering::Relaxed);
         let write_ptr = self.0.write_ptr.load(Ordering::Acquire);
 
         self.0.length - (write_ptr - read_ptr)
@@ -170,7 +170,7 @@ impl<T: Send> AtomicRingWriter<T> {
 
 impl<T: Send> Push<T> for AtomicRingWriter<T> {
     fn try_push(&mut self, value: T) -> Option<T> {
-        let read_ptr = self.0.read_ptr.load(Ordering::Acquire);
+        let read_ptr = self.0.read_ptr.load(Ordering::Relaxed);
         let write_ptr = self.0.write_ptr.load(Ordering::Acquire);
         let write_masked = write_ptr & (self.0.length - 1);
 
@@ -189,7 +189,7 @@ impl<T: Send> Push<T> for AtomicRingWriter<T> {
 impl<T: Send + Clone> PushN<T> for AtomicRingWriter<T> {
     fn try_pushn(&mut self, value: &[T]) -> usize {
         let mut copied = 0;
-        let read_ptr = self.0.read_ptr.load(Ordering::Acquire);
+        let read_ptr = self.0.read_ptr.load(Ordering::Relaxed);
         let write_ptr = self.0.write_ptr.load(Ordering::Acquire);
         let to_write = self.0.length - (write_ptr - read_ptr);
 
@@ -269,7 +269,7 @@ mod std_detail {
             let result = ring_writer.try_pushn(value);
 
             if result > 0 {
-                self.0.cond_read.notify_one();
+                self.0.cond_read.notify_all();
             }
 
             result

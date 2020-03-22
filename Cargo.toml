@@ -8,8 +8,9 @@ license = "MIT"
 repository = "https://github.com/eiz/eiz"
 
 [features]
-default = ["rt_queue", "rt_queue_std"]
+default = ["rt_queue", "nvenc", "rt_queue_std"]
 use_std = []
+nvenc = []
 rt_queue = []
 rt_queue_std = ["parking_lot", "rt_queue", "use_std"]
 

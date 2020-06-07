@@ -36,6 +36,37 @@
  *  This file contains the interface constants, structure definitions and function prototypes.
  */
 
+pub const NVENCAPI_MAJOR_VERSION: u32 = 9;
+pub const NVENCAPI_MINOR_VERSION: u32 = 1;
+pub const NVENCAPI_VERSION: u32 = NVENCAPI_MAJOR_VERSION | (NVENCAPI_MINOR_VERSION << 24);
+
+pub const fn nvencapi_struct_version(ver: u32) -> u32 {
+    NVENCAPI_VERSION | (ver << 16) | (0x7 << 28)
+}
+
+pub const NV_ENC_CAPS_PARAM_VER: u32 = nvencapi_struct_version(1);
+pub const NV_ENC_ENCODE_OUT_PARAMS_VER: u32 = nvencapi_struct_version(1);
+pub const NV_ENC_CREATE_INPUT_BUFFER_VER: u32 = nvencapi_struct_version(1);
+pub const NV_ENC_CREATE_BITSTREAM_BUFFER_VER: u32 = nvencapi_struct_version(1);
+pub const NV_ENC_CREATE_MV_BUFFER_VER: u32 = nvencapi_struct_version(1);
+pub const NV_ENC_RC_PARAMS_VER: u32 = nvencapi_struct_version(1);
+pub const NV_ENC_CONFIG_VER: u32 = nvencapi_struct_version(7) | (1 << 31);
+pub const NV_ENC_INITIALIZE_PARAMS_VER: u32 = nvencapi_struct_version(5) | (1 << 31);
+pub const NV_ENC_RECONFIGURE_PARAMS_VER: u32 = nvencapi_struct_version(1) | (1 << 31);
+pub const NV_ENC_PRESET_CONFIG_VER: u32 = nvencapi_struct_version(4) | (1 << 31);
+pub const NV_ENC_PIC_PARAMS_MVC_VER: u32 = nvencapi_struct_version(1);
+pub const NV_ENC_PIC_PARAMS_VER: u32 = nvencapi_struct_version(4) | (1 << 31);
+pub const NV_ENC_MEONLY_PARAMS_VER: u32 = nvencapi_struct_version(3);
+pub const NV_ENC_LOCK_BITSTREAM_VER: u32 = nvencapi_struct_version(1);
+pub const NV_ENC_LOCK_INPUT_BUFFER_VER: u32 = nvencapi_struct_version(1);
+pub const NV_ENC_MAP_INPUT_RESOURCE_VER: u32 = nvencapi_struct_version(4);
+pub const NV_ENC_REGISTER_RESOURCE_VER: u32 = nvencapi_struct_version(3);
+pub const NV_ENC_STAT_VER: u32 = nvencapi_struct_version(1);
+pub const NV_ENC_SEQUENCE_PARAM_PAYLOAD_VER: u32 = nvencapi_struct_version(1);
+pub const NV_ENC_EVENT_PARAMS_VER: u32 = nvencapi_struct_version(1);
+pub const NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS_VER: u32 = nvencapi_struct_version(1);
+pub const NV_ENCODE_API_FUNCTION_LIST_VER: u32 = nvencapi_struct_version(2);
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct __BindgenBitfieldUnit<Storage, Align> {
@@ -346,11 +377,11 @@ pub const _NV_ENC_QP_MAP_MODE_NV_ENC_QP_MAP: _NV_ENC_QP_MAP_MODE = 3;
 pub type _NV_ENC_QP_MAP_MODE = i32;
 pub use self::_NV_ENC_QP_MAP_MODE as NV_ENC_QP_MAP_MODE;
 #[doc = " Progressive frame"]
-pub const _NV_ENC_PIC_STRUCT_NV_ENC_PIC_STRUCT_FRAME: _NV_ENC_PIC_STRUCT = 1;
+pub const NV_ENC_PIC_STRUCT_FRAME: _NV_ENC_PIC_STRUCT = 1;
 #[doc = " Field encoding top field first"]
-pub const _NV_ENC_PIC_STRUCT_NV_ENC_PIC_STRUCT_FIELD_TOP_BOTTOM: _NV_ENC_PIC_STRUCT = 2;
+pub const NV_ENC_PIC_STRUCT_FIELD_TOP_BOTTOM: _NV_ENC_PIC_STRUCT = 2;
 #[doc = " Field encoding bottom field first"]
-pub const _NV_ENC_PIC_STRUCT_NV_ENC_PIC_STRUCT_FIELD_BOTTOM_TOP: _NV_ENC_PIC_STRUCT = 3;
+pub const NV_ENC_PIC_STRUCT_FIELD_BOTTOM_TOP: _NV_ENC_PIC_STRUCT = 3;
 #[doc = " Input picture structure"]
 pub type _NV_ENC_PIC_STRUCT = i32;
 pub use self::_NV_ENC_PIC_STRUCT as NV_ENC_PIC_STRUCT;
@@ -387,49 +418,49 @@ pub const _NV_ENC_MV_PRECISION_NV_ENC_MV_PRECISION_QUARTER_PEL: _NV_ENC_MV_PRECI
 pub type _NV_ENC_MV_PRECISION = i32;
 pub use self::_NV_ENC_MV_PRECISION as NV_ENC_MV_PRECISION;
 #[doc = " Undefined buffer format"]
-pub const _NV_ENC_BUFFER_FORMAT_NV_ENC_BUFFER_FORMAT_UNDEFINED: _NV_ENC_BUFFER_FORMAT = 0;
+pub const NV_ENC_BUFFER_FORMAT_UNDEFINED: _NV_ENC_BUFFER_FORMAT = 0;
 #[doc = " Semi-Planar YUV [Y plane followed by interleaved UV plane]"]
-pub const _NV_ENC_BUFFER_FORMAT_NV_ENC_BUFFER_FORMAT_NV12: _NV_ENC_BUFFER_FORMAT = 1;
+pub const NV_ENC_BUFFER_FORMAT_NV12: _NV_ENC_BUFFER_FORMAT = 1;
 #[doc = " Planar YUV [Y plane followed by V and U planes]"]
-pub const _NV_ENC_BUFFER_FORMAT_NV_ENC_BUFFER_FORMAT_YV12: _NV_ENC_BUFFER_FORMAT = 16;
+pub const NV_ENC_BUFFER_FORMAT_YV12: _NV_ENC_BUFFER_FORMAT = 16;
 #[doc = " Planar YUV [Y plane followed by U and V planes]"]
-pub const _NV_ENC_BUFFER_FORMAT_NV_ENC_BUFFER_FORMAT_IYUV: _NV_ENC_BUFFER_FORMAT = 256;
+pub const NV_ENC_BUFFER_FORMAT_IYUV: _NV_ENC_BUFFER_FORMAT = 256;
 #[doc = " Planar YUV [Y plane followed by U and V planes]"]
-pub const _NV_ENC_BUFFER_FORMAT_NV_ENC_BUFFER_FORMAT_YUV444: _NV_ENC_BUFFER_FORMAT = 4096;
+pub const NV_ENC_BUFFER_FORMAT_YUV444: _NV_ENC_BUFFER_FORMAT = 4096;
 #[doc = " 10 bit Semi-Planar YUV [Y plane followed by interleaved UV plane]. Each pixel of size 2 bytes. Most Significant 10 bits contain pixel data."]
-pub const _NV_ENC_BUFFER_FORMAT_NV_ENC_BUFFER_FORMAT_YUV420_10BIT: _NV_ENC_BUFFER_FORMAT = 65536;
+pub const NV_ENC_BUFFER_FORMAT_YUV420_10BIT: _NV_ENC_BUFFER_FORMAT = 65536;
 #[doc = " 10 bit Planar YUV444 [Y plane followed by U and V planes]. Each pixel of size 2 bytes. Most Significant 10 bits contain pixel data."]
-pub const _NV_ENC_BUFFER_FORMAT_NV_ENC_BUFFER_FORMAT_YUV444_10BIT: _NV_ENC_BUFFER_FORMAT = 1048576;
+pub const NV_ENC_BUFFER_FORMAT_YUV444_10BIT: _NV_ENC_BUFFER_FORMAT = 1048576;
 #[doc = " 8 bit Packed A8R8G8B8. This is a word-ordered format"]
 #[doc = "where a pixel is represented by a 32-bit word with B"]
 #[doc = "in the lowest 8 bits, G in the next 8 bits, R in the"]
 #[doc = "8 bits after that and A in the highest 8 bits."]
-pub const _NV_ENC_BUFFER_FORMAT_NV_ENC_BUFFER_FORMAT_ARGB: _NV_ENC_BUFFER_FORMAT = 16777216;
+pub const NV_ENC_BUFFER_FORMAT_ARGB: _NV_ENC_BUFFER_FORMAT = 16777216;
 #[doc = " 10 bit Packed A2R10G10B10. This is a word-ordered format"]
 #[doc = "where a pixel is represented by a 32-bit word with B"]
 #[doc = "in the lowest 10 bits, G in the next 10 bits, R in the"]
 #[doc = "10 bits after that and A in the highest 2 bits."]
-pub const _NV_ENC_BUFFER_FORMAT_NV_ENC_BUFFER_FORMAT_ARGB10: _NV_ENC_BUFFER_FORMAT = 33554432;
+pub const NV_ENC_BUFFER_FORMAT_ARGB10: _NV_ENC_BUFFER_FORMAT = 33554432;
 #[doc = " 8 bit Packed A8Y8U8V8. This is a word-ordered format"]
 #[doc = "where a pixel is represented by a 32-bit word with V"]
 #[doc = "in the lowest 8 bits, U in the next 8 bits, Y in the"]
 #[doc = "8 bits after that and A in the highest 8 bits."]
-pub const _NV_ENC_BUFFER_FORMAT_NV_ENC_BUFFER_FORMAT_AYUV: _NV_ENC_BUFFER_FORMAT = 67108864;
+pub const NV_ENC_BUFFER_FORMAT_AYUV: _NV_ENC_BUFFER_FORMAT = 67108864;
 #[doc = " 8 bit Packed A8B8G8R8. This is a word-ordered format"]
 #[doc = "where a pixel is represented by a 32-bit word with R"]
 #[doc = "in the lowest 8 bits, G in the next 8 bits, B in the"]
 #[doc = "8 bits after that and A in the highest 8 bits."]
-pub const _NV_ENC_BUFFER_FORMAT_NV_ENC_BUFFER_FORMAT_ABGR: _NV_ENC_BUFFER_FORMAT = 268435456;
+pub const NV_ENC_BUFFER_FORMAT_ABGR: _NV_ENC_BUFFER_FORMAT = 268435456;
 #[doc = " 10 bit Packed A2B10G10R10. This is a word-ordered format"]
 #[doc = "where a pixel is represented by a 32-bit word with R"]
 #[doc = "in the lowest 10 bits, G in the next 10 bits, B in the"]
 #[doc = "10 bits after that and A in the highest 2 bits."]
-pub const _NV_ENC_BUFFER_FORMAT_NV_ENC_BUFFER_FORMAT_ABGR10: _NV_ENC_BUFFER_FORMAT = 536870912;
+pub const NV_ENC_BUFFER_FORMAT_ABGR10: _NV_ENC_BUFFER_FORMAT = 536870912;
 #[doc = " Buffer format representing one-dimensional buffer."]
 #[doc = "This format should be used only when registering the"]
 #[doc = "resource as output buffer, which will be used to write"]
 #[doc = "the encoded bit stream or H.264 ME only mode output."]
-pub const _NV_ENC_BUFFER_FORMAT_NV_ENC_BUFFER_FORMAT_U8: _NV_ENC_BUFFER_FORMAT = 1073741824;
+pub const NV_ENC_BUFFER_FORMAT_U8: _NV_ENC_BUFFER_FORMAT = 1073741824;
 #[doc = " Input buffer formats"]
 pub type _NV_ENC_BUFFER_FORMAT = i32;
 pub use self::_NV_ENC_BUFFER_FORMAT as NV_ENC_BUFFER_FORMAT;
@@ -663,39 +694,35 @@ pub const _NV_ENC_STEREO_PACKING_MODE_NV_ENC_STEREO_PACKING_MODE_FRAMESEQ:
 pub type _NV_ENC_STEREO_PACKING_MODE = i32;
 pub use self::_NV_ENC_STEREO_PACKING_MODE as NV_ENC_STEREO_PACKING_MODE;
 #[doc = " input resource type is a directx9 surface"]
-pub const _NV_ENC_INPUT_RESOURCE_TYPE_NV_ENC_INPUT_RESOURCE_TYPE_DIRECTX:
-    _NV_ENC_INPUT_RESOURCE_TYPE = 0;
+pub const NV_ENC_INPUT_RESOURCE_TYPE_DIRECTX: _NV_ENC_INPUT_RESOURCE_TYPE = 0;
 #[doc = " input resource type is a cuda device pointer surface"]
-pub const _NV_ENC_INPUT_RESOURCE_TYPE_NV_ENC_INPUT_RESOURCE_TYPE_CUDADEVICEPTR:
-    _NV_ENC_INPUT_RESOURCE_TYPE = 1;
+pub const NV_ENC_INPUT_RESOURCE_TYPE_CUDADEVICEPTR: _NV_ENC_INPUT_RESOURCE_TYPE = 1;
 #[doc = " input resource type is a cuda array surface."]
 #[doc = "This array must be a 2D array and the CUDA_ARRAY3D_SURFACE_LDST"]
 #[doc = "flag must have been specified when creating it."]
-pub const _NV_ENC_INPUT_RESOURCE_TYPE_NV_ENC_INPUT_RESOURCE_TYPE_CUDAARRAY:
-    _NV_ENC_INPUT_RESOURCE_TYPE = 2;
+pub const NV_ENC_INPUT_RESOURCE_TYPE_CUDAARRAY: _NV_ENC_INPUT_RESOURCE_TYPE = 2;
 #[doc = " input resource type is an OpenGL texture"]
-pub const _NV_ENC_INPUT_RESOURCE_TYPE_NV_ENC_INPUT_RESOURCE_TYPE_OPENGL_TEX:
-    _NV_ENC_INPUT_RESOURCE_TYPE = 3;
+pub const NV_ENC_INPUT_RESOURCE_TYPE_OPENGL_TEX: _NV_ENC_INPUT_RESOURCE_TYPE = 3;
 #[doc = "  Input Resource type"]
 pub type _NV_ENC_INPUT_RESOURCE_TYPE = i32;
 pub use self::_NV_ENC_INPUT_RESOURCE_TYPE as NV_ENC_INPUT_RESOURCE_TYPE;
 #[doc = " Registered surface will be used for input image"]
-pub const _NV_ENC_BUFFER_USAGE_NV_ENC_INPUT_IMAGE: _NV_ENC_BUFFER_USAGE = 0;
+pub const NV_ENC_INPUT_IMAGE: _NV_ENC_BUFFER_USAGE = 0;
 #[doc = " Registered surface will be used for output of H.264 ME only mode."]
 #[doc = "This buffer usage type is not supported for HEVC ME only mode."]
-pub const _NV_ENC_BUFFER_USAGE_NV_ENC_OUTPUT_MOTION_VECTOR: _NV_ENC_BUFFER_USAGE = 1;
+pub const NV_ENC_OUTPUT_MOTION_VECTOR: _NV_ENC_BUFFER_USAGE = 1;
 #[doc = " Registered surface will be used for output bitstream in encoding"]
-pub const _NV_ENC_BUFFER_USAGE_NV_ENC_OUTPUT_BITSTREAM: _NV_ENC_BUFFER_USAGE = 2;
+pub const NV_ENC_OUTPUT_BITSTREAM: _NV_ENC_BUFFER_USAGE = 2;
 #[doc = "  Buffer usage"]
 pub type _NV_ENC_BUFFER_USAGE = i32;
 pub use self::_NV_ENC_BUFFER_USAGE as NV_ENC_BUFFER_USAGE;
 #[doc = " encode device type is a directx9 device"]
-pub const _NV_ENC_DEVICE_TYPE_NV_ENC_DEVICE_TYPE_DIRECTX: _NV_ENC_DEVICE_TYPE = 0;
+pub const NV_ENC_DEVICE_TYPE_DIRECTX: _NV_ENC_DEVICE_TYPE = 0;
 #[doc = " encode device type is a cuda device"]
-pub const _NV_ENC_DEVICE_TYPE_NV_ENC_DEVICE_TYPE_CUDA: _NV_ENC_DEVICE_TYPE = 1;
+pub const NV_ENC_DEVICE_TYPE_CUDA: _NV_ENC_DEVICE_TYPE = 1;
 #[doc = " encode device type is an OpenGL device."]
 #[doc = "Use of this device type is supported only on Linux"]
-pub const _NV_ENC_DEVICE_TYPE_NV_ENC_DEVICE_TYPE_OPENGL: _NV_ENC_DEVICE_TYPE = 2;
+pub const NV_ENC_DEVICE_TYPE_OPENGL: _NV_ENC_DEVICE_TYPE = 2;
 #[doc = "  Encoder Device type"]
 pub type _NV_ENC_DEVICE_TYPE = i32;
 pub use self::_NV_ENC_DEVICE_TYPE as NV_ENC_DEVICE_TYPE;
@@ -3811,6 +3838,9 @@ pub type PNVENCSETIOCUDASTREAMS = ::core::option::Option<
 pub type PNVENCODEAPICREATEINSTANCE = ::core::option::Option<
     unsafe extern "C" fn(functionList: *mut NV_ENCODE_API_FUNCTION_LIST) -> NVENCSTATUS,
 >;
+
+pub type PNVENCODEAPIGETMAXSUPPORTEDVERSION =
+    ::core::option::Option<unsafe extern "C" fn(version: *mut u32) -> NVENCSTATUS>;
 
 #[doc = " NV_ENCODE_API_FUNCTION_LIST"]
 #[repr(C)]

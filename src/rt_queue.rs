@@ -111,7 +111,7 @@ impl<T: Send> Drop for AtomicRing<T> {
             let read_masked = read_ptr & (self.length - 1);
 
             unsafe {
-                drop((*self.buf.offset(read_masked as isize)).read());
+                drop((*self.buf.offset(read_masked as isize)).assume_init_read());
             }
 
             read_ptr += 1;
@@ -151,7 +151,7 @@ impl<T: Send> Pop<T> for AtomicRingReader<T> {
             return None;
         }
 
-        let result = unsafe { (*self.0.buf.offset(read_masked as isize)).read() };
+        let result = unsafe { (*self.0.buf.offset(read_masked as isize)).assume_init_read() };
         self.0
             .read_ptr
             .store(read_ptr.wrapping_add(1), Ordering::Release);

@@ -10,9 +10,17 @@ repository = "https://github.com/eiz/eiz"
 [features]
 default = []
 use_std = []
+com = ["winapi"]
 nvenc = []
 rt_queue = []
 rt_queue_std = ["parking_lot", "rt_queue", "use_std"]
 
 [dependencies]
 parking_lot = { optional = true, version = "0.10.0" }
+winapi = { optional = true, version = "0.3", features = [
+    "combaseapi",
+    "objbase",
+    "unknwnbase",
+    "winerror",
+    "winnt",
+] }

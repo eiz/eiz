@@ -13,6 +13,8 @@ use_std = []
 com = [
     "winapi",
     "winapi/combaseapi",
+    "winapi/minwindef",
+    "winapi/oleauto",
     "winapi/objbase",
     "winapi/unknwnbase",
     "winapi/winerror",

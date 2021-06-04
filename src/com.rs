@@ -1,11 +1,20 @@
+use core::borrow::Borrow;
 use core::fmt;
 use core::ops::Deref;
 use core::ptr::{self, NonNull};
+use std::marker::PhantomData;
+use std::ops::DerefMut;
+use winapi::shared::minwindef::UINT;
 use winapi::shared::winerror::SUCCEEDED;
+use winapi::shared::winerror::S_OK;
+use winapi::shared::wtypes::BSTR;
 use winapi::shared::wtypesbase::CLSCTX_INPROC_SERVER;
 use winapi::um::combaseapi::CoCreateInstance;
 use winapi::um::combaseapi::{CoInitializeEx, CoUninitialize};
 use winapi::um::objbase::{COINIT_APARTMENTTHREADED, COINIT_MULTITHREADED};
+use winapi::um::oleauto::SysAllocStringLen;
+use winapi::um::oleauto::SysFreeString;
+use winapi::um::oleauto::SysStringLen;
 use winapi::um::unknwnbase::IUnknown;
 use winapi::um::winnt::HRESULT;
 use winapi::Class;
@@ -60,6 +69,18 @@ impl<T: Interface> ComPtr<T> {
     pub fn as_ptr(&self) -> *mut T {
         self.0.as_ptr()
     }
+
+    pub fn iter<V: Interface, F: Fn(&ComPtr<T>, *mut *mut V) -> HRESULT>(
+        &self,
+        f: F,
+    ) -> impl core::iter::Iterator<Item = ComPtr<V>> {
+        let outer = self.clone();
+
+        ComIterator {
+            f: move |x| (f)(&outer, x),
+            _phantom: PhantomData,
+        }
+    }
 }
 
 impl<T: Interface> Clone for ComPtr<T> {
@@ -113,6 +134,24 @@ where
     }
 }
 
+pub fn com_new_bstr<F>(f: F) -> Result<BString, ComError>
+where
+    F: FnOnce(*mut BSTR) -> HRESULT,
+{
+    let mut ptr: BSTR = ptr::null_mut();
+    let hr = (f)(&mut ptr);
+
+    if SUCCEEDED(hr) {
+        if ptr.is_null() {
+            panic!["invariant: new BSTR must not be null."];
+        } else {
+            Ok(unsafe { BString::from_raw_unchecked(ptr) })
+        }
+    } else {
+        Err(ComError(hr))
+    }
+}
+
 pub fn com_new_void<R, F>(f: F) -> Option<ComPtr<R>>
 where
     F: FnOnce(*mut *mut R),
@@ -138,6 +177,30 @@ where
         Ok(())
     } else {
         Err(ComError(hr))
+    }
+}
+
+struct ComIterator<V: Interface, F: Fn(*mut *mut V) -> HRESULT> {
+    f: F,
+    _phantom: PhantomData<V>,
+}
+
+impl<V: Interface, F: Fn(*mut *mut V) -> HRESULT> core::iter::Iterator for ComIterator<V, F> {
+    type Item = ComPtr<V>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut ptr: *mut V = ptr::null_mut();
+
+        match (self.f)(&mut ptr) {
+            S_OK => {
+                if ptr.is_null() {
+                    panic!["invariant: COM iterator returned S_OK with no value"];
+                } else {
+                    Some(unsafe { ComPtr::from_raw_unchecked(ptr) })
+                }
+            }
+            _ => None,
+        }
     }
 }
 
@@ -167,5 +230,72 @@ impl ScopedComInitialize {
 impl Drop for ScopedComInitialize {
     fn drop(&mut self) {
         unsafe { CoUninitialize() }
+    }
+}
+
+#[repr(transparent)]
+pub struct BStr(BSTR);
+
+impl BStr {
+    pub unsafe fn from_raw_unchecked(ptr: BSTR) -> Self {
+        Self(ptr)
+    }
+
+    pub fn len(&self) -> UINT {
+        unsafe { SysStringLen(self.0) }
+    }
+
+    pub fn as_ptr(&self) -> BSTR {
+        self.0
+    }
+
+    #[cfg(feature = "use_std")]
+    pub fn to_os_string(&self) -> std::ffi::OsString {
+        unsafe {
+            std::os::windows::ffi::OsStringExt::from_wide(std::slice::from_raw_parts(
+                self.as_ptr(),
+                self.len() as usize,
+            ))
+        }
+    }
+}
+
+#[repr(transparent)]
+pub struct BString(BSTR);
+
+impl BString {
+    pub unsafe fn from_raw_unchecked(ptr: BSTR) -> Self {
+        Self(ptr)
+    }
+
+    pub fn from_slice(chars: &[u16]) -> Self {
+        assert!(chars.len() <= u32::MAX as usize);
+        Self(unsafe { SysAllocStringLen(chars.as_ptr(), chars.len() as u32) })
+    }
+}
+
+impl Deref for BString {
+    type Target = BStr;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { core::mem::transmute(self) }
+    }
+}
+
+impl DerefMut for BString {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { core::mem::transmute(self) }
+    }
+}
+
+impl Borrow<BStr> for BString {
+    fn borrow(&self) -> &BStr {
+        unsafe { core::mem::transmute(self) }
+    }
+}
+
+impl Drop for BString {
+    fn drop(&mut self) {
+        unsafe { SysFreeString(self.0) }
     }
 }

@@ -2,10 +2,13 @@ use core::fmt;
 use core::ops::Deref;
 use core::ptr::{self, NonNull};
 use winapi::shared::winerror::SUCCEEDED;
+use winapi::shared::wtypesbase::CLSCTX_INPROC_SERVER;
+use winapi::um::combaseapi::CoCreateInstance;
 use winapi::um::combaseapi::{CoInitializeEx, CoUninitialize};
 use winapi::um::objbase::{COINIT_APARTMENTTHREADED, COINIT_MULTITHREADED};
 use winapi::um::unknwnbase::IUnknown;
 use winapi::um::winnt::HRESULT;
+use winapi::Class;
 use winapi::Interface;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -30,6 +33,19 @@ impl std::error::Error for ComError {}
 pub struct ComPtr<T: Interface>(NonNull<T>);
 
 impl<T: Interface> ComPtr<T> {
+    pub fn create_inproc<C: Class>() -> Result<Self, ComError> {
+        com_new(|x: *mut *mut T| unsafe {
+            CoCreateInstance(
+                &C::uuidof(),
+                ptr::null_mut(),
+                CLSCTX_INPROC_SERVER,
+                &T::uuidof(),
+                x as *mut _,
+            )
+        })
+        .map(|obj| obj.unwrap())
+    }
+
     pub unsafe fn from_raw_unchecked(ptr: *mut T) -> Self {
         Self(NonNull::new_unchecked(ptr))
     }

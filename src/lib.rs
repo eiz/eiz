@@ -5,6 +5,9 @@ extern crate alloc;
 #[cfg(feature = "com")]
 pub mod com;
 
+#[cfg(feature = "decklink")]
+pub mod decklink;
+
 #[cfg(feature = "rt_queue")]
 pub mod rt_queue;
 

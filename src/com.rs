@@ -43,7 +43,6 @@ impl<T: Interface> ComPtr<T> {
                 x as *mut _,
             )
         })
-        .map(|obj| obj.unwrap())
     }
 
     pub unsafe fn from_raw_unchecked(ptr: *mut T) -> Self {
@@ -55,7 +54,6 @@ impl<T: Interface> ComPtr<T> {
             com_new(|x| {
                 (self.0.cast::<IUnknown>().as_ref()).QueryInterface(&Q::uuidof(), x as *mut *mut _)
             })
-            .map(|q_ptr| q_ptr.expect("invariant: QueryInterface returns non-null pointers"))
         }
     }
 
@@ -96,7 +94,7 @@ impl<T: Interface> Drop for ComPtr<T> {
     }
 }
 
-pub fn com_new<R, F>(f: F) -> Result<Option<ComPtr<R>>, ComError>
+pub fn com_new<R, F>(f: F) -> Result<ComPtr<R>, ComError>
 where
     F: FnOnce(*mut *mut R) -> HRESULT,
     R: Interface,
@@ -106,9 +104,9 @@ where
 
     if SUCCEEDED(hr) {
         if ptr.is_null() {
-            Ok(None)
+            panic!["invariant: new com object must not be null."];
         } else {
-            Ok(Some(unsafe { ComPtr::from_raw_unchecked(ptr) }))
+            Ok(unsafe { ComPtr::from_raw_unchecked(ptr) })
         }
     } else {
         Err(ComError(hr))

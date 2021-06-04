@@ -17,9 +17,9 @@ com = [
     "winapi/unknwnbase",
     "winapi/winerror",
     "winapi/winnt",
+    "winapi/wtypes",
 ]
 decklink = [
-    "use_std",
     "winapi",
     "winapi/minwindef",
     "winapi/unknwnbase",

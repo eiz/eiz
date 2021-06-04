@@ -4,7 +4,7 @@
     non_snake_case,
     unused_parens
 )]
-use std::os::raw::{c_double, c_int, c_long, c_uchar, c_uint, c_void};
+use winapi::ctypes::{c_double, c_int, c_long, c_uchar, c_uint, c_void};
 use winapi::shared::windef::RECT;
 use winapi::shared::{minwindef::BOOL, wtypes::BSTR};
 use winapi::um::unknwnbase::{IUnknown, IUnknownVtbl};
